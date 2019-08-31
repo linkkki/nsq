@@ -19,7 +19,10 @@ func (t *tlsRequiredOption) Set(s string) error {
 		*t = nsqd.TLSRequiredExceptHTTP
 		return nil
 	}
+
+	// 字符串转布尔值
 	required, err := strconv.ParseBool(s)
+	// 设置是否允许tls
 	if required {
 		*t = nsqd.TLSRequired
 	} else {
@@ -68,10 +71,13 @@ type config map[string]interface{}
 // Validate settings in the config file, and fatal on errors
 func (cfg config) Validate() {
 	// special validation/translation
+	// 这样子不存在时不会报错
 	if v, exists := cfg["tls_required"]; exists {
+		// 底层为整形
 		var t tlsRequiredOption
 		err := t.Set(fmt.Sprintf("%v", v))
 		if err == nil {
+			//
 			cfg["tls_required"] = t.String()
 		} else {
 			logFatal("failed parsing tls_required %+v", v)
@@ -94,8 +100,10 @@ func (cfg config) Validate() {
 }
 
 func nsqdFlagSet(opts *nsqd.Options) *flag.FlagSet {
+	// NewFlagSet创建一个新的、名为name，采用errorHandling为错误处理策略的FlagSet。
 	flagSet := flag.NewFlagSet("nsqd", flag.ExitOnError)
 
+	// 将各种参数注册进flagset
 	// basic options
 	flagSet.Bool("version", false, "print version string")
 	flagSet.String("config", "", "path to config file")

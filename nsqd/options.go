@@ -83,6 +83,7 @@ type Options struct {
 	SnappyEnabled   bool `flag:"snappy"`
 }
 
+// 返回nsqd的参数默认值
 func NewOptions() *Options {
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -91,8 +92,11 @@ func NewOptions() *Options {
 
 	h := md5.New()
 	io.WriteString(h, hostname)
+	// 按照ieee多项式计算crc。
+	// 除数p33位，所以得到的余数是32bit，用一个int32存储
 	defaultID := int64(crc32.ChecksumIEEE(h.Sum(nil)) % 1024)
 
+	// 返回nsqd的参数默认值
 	return &Options{
 		ID:        defaultID,
 		LogPrefix: "[nsqd] ",

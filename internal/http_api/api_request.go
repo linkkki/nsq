@@ -14,6 +14,7 @@ import (
 )
 
 // A custom http.Transport with support for deadline timeouts
+// 支持超时的http.Transport
 func NewDeadlineTransport(connectTimeout time.Duration, requestTimeout time.Duration) *http.Transport {
 	// arbitrary values copied from http.DefaultTransport
 	transport := &http.Transport{
@@ -30,11 +31,13 @@ func NewDeadlineTransport(connectTimeout time.Duration, requestTimeout time.Dura
 	return transport
 }
 
+// 对http.Client的封装
 type Client struct {
 	c *http.Client
 }
 
 func NewClient(tlsConfig *tls.Config, connectTimeout time.Duration, requestTimeout time.Duration) *Client {
+	// 要管理代理、TLS配置、keep-alive、压缩和其他设置，创建一个Transport
 	transport := NewDeadlineTransport(connectTimeout, requestTimeout)
 	transport.TLSClientConfig = tlsConfig
 	return &Client{

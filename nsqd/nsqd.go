@@ -47,6 +47,7 @@ type NSQD struct {
 
 	sync.RWMutex
 
+	// 配置信息
 	opts atomic.Value
 
 	dl        *dirlock.DirLock
@@ -76,11 +77,13 @@ type NSQD struct {
 	ci *clusterinfo.ClusterInfo
 }
 
+// 初始化nsqd结构，并且检查配置信息，不足则补充
 func New(opts *Options) (*NSQD, error) {
 	var err error
 
 	dataPath := opts.DataPath
 	if opts.DataPath == "" {
+		// Getwd返回一个对应当前工作目录的根路径。如果当前目录可以经过多条路径抵达（因为硬链接），Getwd会返回其中一个。
 		cwd, _ := os.Getwd()
 		dataPath = cwd
 	}
@@ -97,6 +100,7 @@ func New(opts *Options) (*NSQD, error) {
 		optsNotificationChan: make(chan struct{}, 1),
 		dl:                   dirlock.New(dataPath),
 	}
+	// httpcli是对http.Client的封装
 	httpcli := http_api.NewClient(nil, opts.HTTPClientConnectTimeout, opts.HTTPClientRequestTimeout)
 	n.ci = clusterinfo.New(n.logf, httpcli)
 
@@ -176,6 +180,7 @@ func (n *NSQD) getOpts() *Options {
 	return n.opts.Load().(*Options)
 }
 
+// 原子的更换配置。
 func (n *NSQD) swapOpts(opts *Options) {
 	n.opts.Store(opts)
 }
@@ -319,32 +324,35 @@ func writeSyncFile(fn string, data []byte) error {
 	return err
 }
 
+// 导入元数据
 func (n *NSQD) LoadMetadata() error {
-	atomic.StoreInt32(&n.isLoading, 1)
-	defer atomic.StoreInt32(&n.isLoading, 0)
+	atomic.StoreInt32(&n.isLoading, 1)       // 原子复值为1
+	defer atomic.StoreInt32(&n.isLoading, 0) // 原子复值为0
 
-	fn := newMetadataFile(n.getOpts())
+	fn := newMetadataFile(n.getOpts()) // 根据用户传的参数DataPath+"nsqd.dat"
 
-	data, err := readOrEmpty(fn)
+	data, err := readOrEmpty(fn) // 读取文件，文件不存在返回错误
+	// 如果文件不存在，return
 	if err != nil {
 		return err
 	}
+	// 如果文件为空
 	if data == nil {
 		return nil // fresh start
 	}
 
-	var m meta
-	err = json.Unmarshal(data, &m)
+	var m meta                     // m里面装的是topic的切片
+	err = json.Unmarshal(data, &m) // 将从nsqd.dat读取到的反序列化到变量m
 	if err != nil {
 		return fmt.Errorf("failed to parse metadata in %s - %s", fn, err)
 	}
 
 	for _, t := range m.Topics {
-		if !protocol.IsValidTopicName(t.Name) {
+		if !protocol.IsValidTopicName(t.Name) { // 判断切片名是否合法
 			n.logf(LOG_WARN, "skipping creation of invalid topic %s", t.Name)
 			continue
 		}
-		topic := n.GetTopic(t.Name)
+		topic := n.GetTopic(t.Name) // 获取主题
 		if t.Paused {
 			topic.Pause()
 		}
@@ -353,7 +361,7 @@ func (n *NSQD) LoadMetadata() error {
 				n.logf(LOG_WARN, "skipping creation of invalid channel %s", c.Name)
 				continue
 			}
-			channel := topic.GetChannel(c.Name)
+			channel := topic.GetChannel(c.Name) // 获取Channel Object
 			if c.Paused {
 				channel.Pause()
 			}
@@ -371,8 +379,9 @@ func (n *NSQD) PersistMetadata() error {
 
 	js := make(map[string]interface{})
 	topics := []interface{}{}
+	// 过滤topic和channel
 	for _, topic := range n.topicMap {
-		if topic.ephemeral {
+		if topic.ephemeral { // 如果是临时的就忽略
 			continue
 		}
 		topicData := make(map[string]interface{})
@@ -406,6 +415,7 @@ func (n *NSQD) PersistMetadata() error {
 
 	tmpFileName := fmt.Sprintf("%s.%d.tmp", fileName, rand.Int())
 
+	// 写入临时文件
 	err = writeSyncFile(tmpFileName, data)
 	if err != nil {
 		return err
